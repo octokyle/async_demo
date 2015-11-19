@@ -1,76 +1,97 @@
-var async = require('async');
-
-var t = require('./t');
-var log = t.log;
-
-/**
- * 串行执行，一个函数数组中的每个函数，每一个函数执行完成之后才能执行下一个函数。
+/****************************************************************************************
+ * NAME
+ *     series(tasks, [callback])
  *
- * 如果任何一个函数向它的回调函数中传了一个error，则后面的函数都不会被执行，并且会立刻将该error以及已经执行了的函数的结果，传给series中最后那个callback。
- * 当所有的函数执行完后（没有出错），则会把每个函数传给其回调函数的结果合并为一个数组，传给series最后的那个callback。
- * 还可以json的形式来提供tasks。每一个属性都会被当作函数来执行，并且结果也会以json形式传给series最后的那个callback。这种方式可读性更高一些。
- */
-// series(tasks, [callback])
+ * DESCRIPTION
+ *     Runs the functions in the 'tasks' array in series, each one running once the 
+ *     previous function has completed. If any functions in the series passes an eror to
+ *     its callback, no more functions are run, and 'callback' is immediately called with
+ *     the value of error. Ohterwise, 'callback' receives an array of results when 
+ *     'tasks' have completed.
+ *
+ *     It is also possibel to use an object instead of an array. Each property will be 
+ *     run as a function, and the results will be passed to the final 'callback' as an
+ *     object instead of an array. This can be a more readable way of handling results
+ *     from series.
+ *
+ * NOTE
+ *     While many implementations preserve the order of object properties, the ECMAScript
+ *     Language Specification explicitly states that "The mechanics and order of 
+ *     enumberating the properties is not specified."
+ * 
+ *     So if you rely on the order in which your series of functions are executed, and 
+ *     want this to work on all platforms, consider using an array.
+ * 
+ * ARGUMENTS
+ *     'tasks' - An array orobject containing functions to run, each function is passed
+ *     a 'callback(err, result)' it must call on completion with an eror 'err' (which 
+ *     can be null) and an optional 'result' value.
+ * 
+ *     'callback(err, results)' - An optional callback to run once all the functions 
+ *     have completed. This function gets a results array (or object) containing all
+ *     the result arguments passed to the 'task' callbacks.
+ *  
+ ****************************************************************************************/
+'use strict';
+
+var async = require('async');
+var lib = require('./lib');
+var log = lib.log;
 
 /**
- * 全部函数都正常执行。每个函数产生的值将按顺序合并为一个数组，传给最终的callback。
- */
-// 1.1
+ * CASE 1
+ *
+ * All functions execute one by one. the result will be merge to an array or object.
+ * 
+ **/
 async.series([
-    function(cb) { t.inc(3, cb); },
-    function(cb) { t.inc(8, cb); },
-    function(cb) { t.inc(2, cb); }
+    function(cb) { lib.inc(3, cb); },
+    function(cb) { lib.inc(8, cb); },
+    function(cb) { lib.inc(2, cb); }
 ], function(err, results) {
-    log('1.1 err: ', err);
-    log('1.1 results: ', results);
+    log('1. err: ', err);
+    log('1. results: ', results);
 });
-//05.155> 1.1 err: null
-//05.156> 1.1 results: [ 4, 9, 3 ]
+
+/*** Result of case 1 ***
+04.133> 1.1 err: null
+04.133> 1.1 results: [ 4, 9, 3 ]
+*/
 
 /**
- * 中间有函数出错。出错之后的函数不会执行，错误及之前正常执行的函数结果将传给最终的callback。
- */
-// 1.2
+ * CASE 2
+ *
+ * Error occurs halfway.
+ **/
 async.series([
-    function(cb) { t.inc(3, cb); },
-    function(cb) { t.err('test_err', cb); },
-    function(cb) { t.inc(8, cb); }
-], function (err, results) {
-    log('1.2 err: ', err);
-    log('1.2 results: ', results);
-});
-//04.964> 1.2 err: test_err
-//04.973> 1.2 results: [ 4, undefined ]
-
-/**
- * 如果某个函数传的数据是undefined, null, {}, []等，它们会原样传给最终callback。
- */
-// 1.3
-async.series([
-    function(cb) { t.fire(3, cb);},
-    function(cb) { t.fire(undefined, cb); },
-    function(cb) { t.fire(null, cb); },
-    function(cb) { t.fire({}, cb); },
-    function(cb) { t.fire([], cb); },
-    function(cb) { t.fire('abc', cb) }
+    function(cb) { lib.inc(3, cb); },
+    function(cb) { lib.err('error occurs halfway', cb); },
+    function(cb) { lib.inc(8, cb); }
 ], function(err, results) {
-    log('1.3 err: ', err);
-    log('1.3 results: ', results);
+    log('2. err: ', err);
+    log('2. results: ', results);
 });
-//05.794> 1.3 err: null
-//05.795> 1.3 results: [ 3, undefined, null, {}, [], 'abc' ]
+
+/*** Result of case 2 ***
+44.966> 2. err: error occurs halfway
+44.981> 2. results: [ 4, undefined ]
+*/
 
 /**
- * 以json形式传入tasks。其结果也将以json形式传给最终callback。
- */
+ * CASE 3
+ *
+ * If the arguments are objects (JSON), the results will be objects too. 
+ **/
 async.series({
-    a: function(cb) { t.inc(3, cb); },
-    b: function(cb) { t.fire(undefined, cb); },
-    c: function (cb) { t.err('myerr', cb); },
-    d: function (cb) { t.inc(8, cb); }
-}, function (err, results) {
-    log('1.4 err: ', err);
-    log('1.4 results: ', results);
+    a: function(cb) { lib.inc(3, cb); },
+    b: function(cb) { lib.inc(8, cb); },
+    c: function(cb) { lib.inc(2, cb); }
+}, function(err, results) {
+    log('3. err: ', err);
+    log('3. results: ', results);
 });
-//05.178> 1.4 err: myerr
-//05.179> 1.4 results: { a: 4, b: undefined, c: undefined }
+
+/*** Result of case 3 ***
+17.332> 3. err: null
+17.347> 3. results: { a: 4, b: 9, c: 3 }
+*/

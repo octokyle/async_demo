@@ -1,66 +1,93 @@
+/****************************************************************************************
+ * NAME
+ *     waterfall(tasks, [callback])
+ *
+ * DESCRIPTION
+ *     Runs the 'tasks' array of functions in series, each passing their results 
+ *     to the next in the array. However, if any of the 'tasks' pass an error to 
+ *     their own callback, the next function is not executed, and the main 'callback' 
+ *     is immediately called with the error.
+ *
+ * ARGUMENTS
+ * 	   'tasks' - An array of functions to run, each functions is passed a 
+ *     'callback(err, result1, result2, ...)' it must call on completion.
+ *     The first argument is an error (which can be 'null') and any further arguments 
+ *     will be passed as arguments in order to the next task.
+ * 
+ *     'callback(err, [results])' - An optional callback to run once all the functions 
+ *     have completed. This will be passed the results of the last task's callback.
+ *  
+ ****************************************************************************************/
+'use strict';
+
 var async = require('async');
-var t = require('./t');
-var log = t.log;
+var lib = require('./lib');
+var log = lib.log;
 
 /**
- * 按顺序依次执行一组函数。每个函数产生的值，都将传给下一个。
- * 如果中途出错，后面的函数将不会被执行。错误信息将传给waterfall最终的callback。之前产生的结果被丢弃。
+ * CASE 1
  *
- * 这个函数名为waterfall(瀑布)，可以想像瀑布从上到下，中途冲过一层层突起的石头。
- *
- * 注意，该函数不支持json格式的tasks
- */
-// async.waterfall(tasks, [callback]);
-
-/**
- * 所有函数正常执行，每个函数的结果都将变为下一个函数的参数。
- *
- * 注意，所有的callback都必须形如callback(err, result)，但err参数在前面各函数中无需声明，它被自动处理。
- */
-// 1.1
+ * All functions execute correctly. The result of each function will be
+ * the parameter of next function.
+ * 
+ * All 'callback' should in the form of 'callback(err, result)'. But you don't 
+ * need to declare the err parameter, it is processed automatically.
+ **/
 async.waterfall([
-    function(cb) { log('1.1.1: ', 'start'); cb(null, 3); },
-    function(n, cb) { log('1.1.2: ',n); t.inc(n, cb); },
-    function(n, cb) { log('1.1.3: ',n); t.fire(n*n, cb); }
-], function (err, result) {
-    log('1.1 err: ', err);
-    log('1.1 result: ', result);
+	function(cb) { log('1.1: start'); cb(null, 5); },
+	function(n, cb) { log('1.2: ', n); lib.inc(n, cb); },
+	function(n, cb) { log('1.3: ', n); lib.fire(n * n, cb); }
+], function(err, result) {
+	log('1. err: ', err);
+    log('1. result: ', result);
 });
-//31.749> 1.1.1: start
-//31.752> 1.1.2: 3
-//31.953> 1.1.3: 4
-//32.156> 1.1 err: null
-//32.159> 1.1 result: 16
+
+/*** Result of case 1 ***
+26.008> 1.1: start
+26.023> 1.2: 5
+26.226> 1.3: 6
+26.429> 1. err: null
+26.429> 1. result: 36
+*/
 
 /**
-* 中途有函数出错，其err直接传给最终callback，结果被丢弃，后面的函数不再执行。
-*/
-// 1.2
+ * CASE 2
+ *
+ * Error occurs halfway.
+ **/
 async.waterfall([
-    function(cb) { log('1.2.1: ', 'start'); cb(null, 3); },
-    function(n, cb) { log('1.2.2: ', n); t.inc(n, cb); },
-    function(n, cb) { log('1.2.3: ', n); t.err('myerr', cb); },
-    function(n, cb) { log('1.2.4: ', n); t.fire(n, cb); }
-], function (err, result) {
-    log('1.2 err: ', err);
-    log('1.2 result: ', result);
+	function(cb) { log('2.1: start'); cb(null, 3); },
+	function(n, cb) { log('2.2: ', n); lib.inc(n, cb); },
+	function(n, cb) { log('2.3: ', n); lib.err('error occurs halfway', cb); },
+	function(n, cb) { log('2.4: ', n); lib.fire(n, cb); }
+], function(err, result) {
+	log('2 err: ', err);
+    log('2 result: ', result);
 });
-//44.935> 1.2.1: start
-//44.939> 1.2.2: 3
-//45.140> 1.2.3: 4
-//45.344> 1.2 err: myerr
-//45.348> 1.2 result:
+
+/*** Result of case 2 ***
+51.219> 2.1: start
+51.235> 2.2: 3
+51.438> 2.3: 4
+51.640> 2 err: error occurs halfway
+51.640> 2 result:
+*/
 
 /**
-* 注意： 以json形式传入tasks，将不会被执行!!
-*/
+ * CASE 3
+ *
+ * async.waterfall() does not accept json-format tasks.
+ **/
 async.waterfall({
-    a: function(cb) { log('1.3.1: ', 'start'); cb(null, 3); },
-    b: function(n, cb) { log('1.3.2: ', n); t.inc(n, cb); },
-    c: function(n, cb) { log('1.3.3: ', n); t.fire(n*n, cb); }
-}, function (err, result) {
-    log('1.3 err: ', err);
-    log('1.3 result: ', result);
+ 	a: function(cb) { log('3.1: start'); cb(null, 3); },
+ 	b: function(n, cb) { log('3.2: ', n); lib.inc(n, cb); },
+ 	c: function(n, cb) { log('3.3: ', n); lib.fire(n*n, cb); }
+}, function(err, result) {
+	log('3 err: ', err);
+    log('3 result: ', result);
 });
-//49.222> 1.3 err: [Error: First argument to waterfall must be an array of functions]
-//49.228> 1.3 result:
+
+/*** Result of case 3 ***
+17.560> 3 err: [Error: First argument to waterfall must be an array of functions]
+17.560> 3 result:
+*/
